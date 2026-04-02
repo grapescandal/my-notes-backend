@@ -42,3 +42,41 @@ func (s *NoteService) GetNote(id string) (domain.Note, error) {
 func (s *NoteService) ListNotes() ([]domain.Note, error) {
 	return s.repo.List()
 }
+
+func (s *NoteService) DeleteNote(id string) error {
+	ok, err := s.repo.Delete(id)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return errors.New("note not found")
+	}
+	return nil
+}
+
+func (s *NoteService) SaveNote(n domain.Note) (domain.Note, bool, error) {
+	// returns (note, created, error)
+	if n.ID == "" {
+		n.ID = uuid.NewString()
+		n.CreatedAt = time.Now().UTC()
+		nn, err := s.repo.Create(n)
+		return nn, true, err
+	}
+
+	// Check if exists
+	existing, ok, err := s.repo.Get(n.ID)
+	if err != nil {
+		return domain.Note{}, false, err
+	}
+	if ok {
+		// preserve CreatedAt from existing
+		n.CreatedAt = existing.CreatedAt
+		nn, err := s.repo.Update(n)
+		return nn, false, err
+	}
+
+	// Not found: create new with provided ID
+	n.CreatedAt = time.Now().UTC()
+	nn, err := s.repo.Create(n)
+	return nn, true, err
+}

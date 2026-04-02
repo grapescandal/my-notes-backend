@@ -38,3 +38,20 @@ func (r *MemoryRepo) List() ([]domain.Note, error) {
 	}
 	return out, nil
 }
+
+func (r *MemoryRepo) Delete(id string) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.notes[id]; !ok {
+		return false, nil
+	}
+	delete(r.notes, id)
+	return true, nil
+}
+
+func (r *MemoryRepo) Update(n domain.Note) (domain.Note, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.notes[n.ID] = n
+	return n, nil
+}
