@@ -17,18 +17,20 @@ func RegisterRoutes(r *gin.Engine, svc *usecase.NoteService) {
 
 	api.POST("/notes", func(c *gin.Context) {
 		var req struct {
-			ID      *string `json:"id"`
-			Title   string  `json:"title"`
-			Content string  `json:"content"`
+			ID      *string `json:"id" binding:"omitempty"`
+			Title   string  `json:"title" binding:"required"`
+			Content *string `json:"content" binding:"omitempty"`
 		}
-		if err := c.BindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
 		note := domain.Note{
-			Title:   req.Title,
-			Content: req.Content,
+			Title: req.Title,
+		}
+		if req.Content != nil {
+			note.Content = *req.Content
 		}
 		if req.ID != nil {
 			note.ID = *req.ID
@@ -57,8 +59,14 @@ func RegisterRoutes(r *gin.Engine, svc *usecase.NoteService) {
 	})
 
 	api.GET("/notes/:id", func(c *gin.Context) {
-		id := c.Param("id")
-		n, err := svc.GetNote(id)
+		var uri struct {
+			ID string `uri:"id" binding:"required"`
+		}
+		if err := c.ShouldBindUri(&uri); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+			return
+		}
+		n, err := svc.GetNote(uri.ID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "note not found"})
 			return
@@ -67,8 +75,14 @@ func RegisterRoutes(r *gin.Engine, svc *usecase.NoteService) {
 	})
 
 	api.DELETE("/notes/:id", func(c *gin.Context) {
-		id := c.Param("id")
-		err := svc.DeleteNote(id)
+		var uri struct {
+			ID string `uri:"id" binding:"required"`
+		}
+		if err := c.ShouldBindUri(&uri); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+			return
+		}
+		err := svc.DeleteNote(uri.ID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "note not found"})
 			return
