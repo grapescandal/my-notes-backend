@@ -2,6 +2,7 @@ package httpadapter
 
 import (
 	"net/http"
+	"time"
 
 	"my-note/domain"
 	"my-note/usecase"
@@ -11,7 +12,15 @@ import (
 )
 
 func RegisterRoutes(r *gin.Engine, svc *usecase.NoteService) {
-	r.Use(cors.Default())
+	config := cors.Config{
+		AllowOrigins:     []string{"http://localhost:3000"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}
+	r.Use(cors.New(config))
 
 	api := r.Group("/api")
 
@@ -55,7 +64,18 @@ func RegisterRoutes(r *gin.Engine, svc *usecase.NoteService) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusOK, notes)
+		// return only id and title, already sorted by service
+		out := make([]struct {
+			ID    string `json:"id"`
+			Title string `json:"title"`
+		}, 0, len(notes))
+		for _, n := range notes {
+			out = append(out, struct {
+				ID    string `json:"id"`
+				Title string `json:"title"`
+			}{ID: n.ID, Title: n.Title})
+		}
+		c.JSON(http.StatusOK, out)
 	})
 
 	api.GET("/notes/:id", func(c *gin.Context) {

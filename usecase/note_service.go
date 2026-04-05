@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"errors"
+	"sort"
 	"time"
 
 	"my-note/domain"
@@ -19,11 +20,13 @@ func NewNoteService(r repository.NoteRepository) *NoteService {
 }
 
 func (s *NoteService) CreateNote(title, content string) (domain.Note, error) {
+	t := time.Now().UTC()
+	id := uuid.NewString()
 	n := domain.Note{
-		ID:        uuid.NewString(),
+		ID:        id,
 		Title:     title,
 		Content:   content,
-		CreatedAt: time.Now().UTC(),
+		CreatedAt: &t,
 	}
 	return s.repo.Create(n)
 }
@@ -40,7 +43,37 @@ func (s *NoteService) GetNote(id string) (domain.Note, error) {
 }
 
 func (s *NoteService) ListNotes() ([]domain.Note, error) {
-	return s.repo.List()
+	notes, err := s.repo.List()
+	if err != nil {
+		return nil, err
+	}
+
+	// Sort by UpdatedAt (most recent first), then CreatedAt (most recent first)
+	getUpdated := func(n domain.Note) time.Time {
+		if n.UpdatedAt != nil {
+			return *n.UpdatedAt
+		}
+		return time.Time{}
+	}
+
+	getCreated := func(n domain.Note) time.Time {
+		if n.CreatedAt != nil {
+			return *n.CreatedAt
+		}
+		return time.Time{}
+	}
+
+	// stable sort using slice comparator
+	sort.Slice(notes, func(i, j int) bool {
+		ui := getUpdated(notes[i])
+		uj := getUpdated(notes[j])
+		if !ui.Equal(uj) {
+			return ui.After(uj)
+		}
+		return getCreated(notes[i]).After(getCreated(notes[j]))
+	})
+
+	return notes, nil
 }
 
 func (s *NoteService) DeleteNote(id string) error {
@@ -57,8 +90,10 @@ func (s *NoteService) DeleteNote(id string) error {
 func (s *NoteService) SaveNote(n domain.Note) (domain.Note, bool, error) {
 	// returns (note, created, error)
 	if n.ID == "" {
-		n.ID = uuid.NewString()
-		n.CreatedAt = time.Now().UTC()
+		id := uuid.NewString()
+		n.ID = id
+		t := time.Now().UTC()
+		n.CreatedAt = &t
 		nn, err := s.repo.Create(n)
 		return nn, true, err
 	}
@@ -71,12 +106,16 @@ func (s *NoteService) SaveNote(n domain.Note) (domain.Note, bool, error) {
 	if ok {
 		// preserve CreatedAt from existing
 		n.CreatedAt = existing.CreatedAt
+		// stamp updated at
+		t := time.Now().UTC()
+		n.UpdatedAt = &t
 		nn, err := s.repo.Update(n)
 		return nn, false, err
 	}
 
 	// Not found: create new with provided ID
-	n.CreatedAt = time.Now().UTC()
+	t := time.Now().UTC()
+	n.CreatedAt = &t
 	nn, err := s.repo.Create(n)
 	return nn, true, err
 }
